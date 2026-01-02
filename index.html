@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Futuristic Space Battle</title>
+  <style>
+    body {
+      margin: 0;
+      background: black;
+      overflow: hidden;
+      color: cyan;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    canvas {
+      display: block;
+      margin: auto;
+      background: radial-gradient(circle, #000428, #004e92);
+      border: 2px solid cyan;
+    }
+
+    h2, p {
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+<h2>🚀 Futuristic Space Gun Ship Battle</h2>
+<p>← → Move | Space = Shoot | Touch for Mobile</p>
+
+<canvas id="game" width="400" height="500"></canvas>
+
+<script>
+// Canvas setup
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+// Game objects
+let ship = { x: 180, y: 440, width: 40, height: 40, health: 5 };
+let bullets = [];
+let enemies = [];
+let explosions = [];
+let boss = null;
+let score = 0;
+
+// Controls
+let keys = {};
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
+
+// Mobile controls
+canvas.addEventListener("touchstart", e => {
+    let touchX = e.touches[0].clientX - canvas.getBoundingClientRect().left;
+    if (touchX < ship.x + ship.width/2) ship.x -= 20;
+    else ship.x += 20;
+    bullets.push({ x: ship.x + 18, y: ship.y });
+});
+
+// Sounds
+let shootSound = new Audio("https://freesound.org/data/previews/520/520447_1071368-lq.mp3");
+let explosionSound = new Audio("https://freesound.org/data/previews/178/178140_3380628-lq.mp3");
+
+// Shooting function
+function shoot() {
+    bullets.push({ x: ship.x + 18, y: ship.y });
+    shootSound.play();
+}
+
+// Enemy creation
+function createEnemy() {
+    let type = Math.random() < 0.1 ? "boss" : "enemy";
+    if (type === "boss" && !boss) {
+        boss = { x: 100, y: 20, width: 80, height: 40, health: 20 };
+    } else {
+        enemies.push({ x: Math.random() * 360, y: -40, size: 30 });
+    }
+}
+
+setInterval(createEnemy, 1000);
+
+// Explosion effect
+function createExplosion(x, y) {
+    explosions.push({ x, y, size: 20, alpha: 1 });
+    explosionSound.play();
+}
+
+// Game Loop
+function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Move ship
+    if (keys["ArrowLeft"] && ship.x > 0) ship.x -= 5;
+    if (keys["ArrowRight"] && ship.x < 360) ship.x += 5;
+    if (keys["Space"]) { shoot(); keys["Space"] = false; }
+
+    // Draw ship
+    ctx.fillStyle = "lime";
+    ctx.fillRect(ship.x, ship.y, ship.width, ship.height);
+
+    // Health bar
+    for (let i = 0; i < ship.health; i++) {
+        ctx.fillStyle = "red";
+        ctx.fillRect(10 + i*22, 30, 20, 10);
+    }
+
+    // Bullets
+    ctx.fillStyle = "cyan";
+    bullets.forEach((b, i) => {
+        b.y -= 7;
+        ctx.fillRect(b.x, b.y, 4, 10);
+        if (b.y < 0) bullets.splice(i, 1);
+    });
+
+    // Enemies
+    ctx.fillStyle = "red";
+    enemies.forEach((e, ei) => {
+        e.y += 2;
+        ctx.fillRect(e.x, e.y, e.size, e.size);
+
+        // Bullet collision
+        bullets.forEach((b, bi) => {
+            if (b.x > e.x && b.x < e.x + e.size && b.y > e.y && b.y < e.y + e.size) {
+                createExplosion(e.x + e.size/2, e.y + e.size/2);
+                enemies.splice(ei, 1);
+                bullets.splice(bi, 1);
+                score++;
+            }
+        });
+
+        // Ship collision
+        if (
+            ship.x < e.x + e.size &&
+            ship.x + ship.width > e.x &&
+            ship.y < e.y + e.size &&
+            ship.y + ship.height > e.y
+        ) {
+            createExplosion(ship.x + ship.width/2, ship.y + ship.height/2);
+            ship.health--;
+            enemies.splice(ei, 1);
+        }
+
+        if (e.y > canvas.height) enemies.splice(ei, 1);
+    });
+
+    // Boss
+    if (boss) {
+        ctx.fillStyle = "purple";
+        ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+        boss.y += 0.5;
+
+        // Bullet collision
+        bullets.forEach((b, bi) => {
+            if (b.x > boss.x && b.x < boss.x + boss.width && b.y > boss.y && b.y < boss.y + boss.height) {
+                boss.health--;
+                bullets.splice(bi, 1);
+                createExplosion(b.x, b.y);
+            }
+        });
+
+        if (boss.health <= 0) {
+            createExplosion(boss.x + boss.width/2, boss.y + boss.height/2);
+            score += 10;
+            boss = null;
+        }
+
+        // Boss collision
+        if (
+            ship.x < boss.x + boss.width &&
+            ship.x + ship.width > boss.x &&
+            ship.y < boss.y + boss.height &&
+            ship.y + ship.height > boss.y
+        ) {
+            createExplosion(ship.x + ship.width/2, ship.y + ship.height/2);
+            ship.health = 0;
+        }
+    }
+
+    // Explosions
+    explosions.forEach((exp, ei) => {
+        ctx.fillStyle = `rgba(255,255,0,${exp.alpha})`;
+        ctx.beginPath();
+        ctx.arc(exp.x, exp.y, exp.size, 0, 2 * Math.PI);
+        ctx.fill();
+        exp.alpha -= 0.05;
+        exp.size += 1;
+        if (exp.alpha <= 0) explosions.splice(ei, 1);
+    });
+
+    // Score
+    ctx.fillStyle = "cyan";
+    ctx.fillText("Score: " + score, 10, 20);
+
+    // Game Over
+    if (ship.health <= 0) {
+        ctx.fillStyle = "white";
+        ctx.font = "30px Arial";
+        ctx.fillText("GAME OVER", 100, 250);
+        return;
+    }
+
+    requestAnimationFrame(update);
+}
+
+update();
+</script>
+
+</body>
+</html>
